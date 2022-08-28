@@ -52,6 +52,15 @@ class Net(T.nn.Module):
         x = self.oupt(x)  # no softmax: CrossEntropyLoss() 
         return x
 
+    def get_num_parameters(self):
+        pp=0
+        for p in list(self.parameters()):
+            nn=1
+            for s in list(p.size()):                
+                nn = nn*s
+            pp += nn
+        return pp           
+
 
 class Dataset(Dataset2):    
     def __init__(self,x,y):
