@@ -122,7 +122,7 @@ class ModelServer:
         shap_values = explainer(pred_X)
         
         # ------------------------------------------------------------------------------
-        # create pd dataframe of explanation scores
+        # create json objects of explanation scores
         N = pred_X.shape[0]
         explanations = []
         for i in range(N):

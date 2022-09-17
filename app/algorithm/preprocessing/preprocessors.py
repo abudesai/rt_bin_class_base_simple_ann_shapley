@@ -302,7 +302,7 @@ class TargetFeatureAdder(BaseEstimator, TransformerMixin):
     
     def transform(self, data): 
         if self.label_field_name not in data.columns: 
-            data[self.label_field_name] = 0.
+            data[self.label_field_name] = ''
         return data
 
 
