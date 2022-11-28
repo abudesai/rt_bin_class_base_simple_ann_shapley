@@ -1,4 +1,3 @@
-# FROM python:3.8.0-slim as builder
 FROM pytorch/pytorch:1.12.0-cuda11.3-cudnn8-runtime as builder
 
 RUN apt-get -y update && apt-get install -y --no-install-recommends \
@@ -27,6 +26,6 @@ ENV PATH="/opt/app:${PATH}"
 
 
 RUN chmod +x train &&\
-    chmod +x test &&\
+    chmod +x predict &&\
     chmod +x tune &&\
     chmod +x serve 
