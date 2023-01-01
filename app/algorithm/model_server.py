@@ -61,7 +61,9 @@ class ModelServer:
         return preds_df
 
     def predict_to_json(self, data):
+        print("data", data.shape)
         preds_df = self.predict_proba(data)
+        print("preds_df", preds_df.shape)
         class_names = preds_df.columns[1:]
         preds_df["__label"] = pd.DataFrame(
             preds_df[class_names], columns=class_names
@@ -78,6 +80,7 @@ class ModelServer:
                 if k not in [self.id_field_name, "__label"]
             }
             predictions_response.append(pred_obj)
+        print("predictions_response", predictions_response)
         return predictions_response
 
     def predict(self, data):
@@ -113,30 +116,26 @@ class ModelServer:
         # original class predictions
 
         model = self._get_model()
-        X_cols = proc_data["X_cols"]
         pred_X = proc_data["X"].astype(np.float)
+        X_cols = proc_data["X_cols"]
         ids = proc_data["ids"]
 
-        pred_classes = model.predict(pred_X)
         pred_target_class_prob = model.predict(pred_X)[:, 1]
 
         class_names = pipeline.get_class_names(self.preprocessor, model_cfg)
-
         # ------------------------------------------------------------------------------
         print(f"Generating local explanations for {pred_X.shape[0]} sample(s).")
         # create the shapley explainer
         mask = np.zeros_like(pred_X)
         explainer = Explainer(self._get_target_class_proba, mask, seed=1)
         # Get local explanations
-        shap_values = explainer(pred_X)
+        shap_values = explainer(pd.DataFrame(pred_X, columns=X_cols))
 
         # ------------------------------------------------------------------------------
         # create json objects of explanation scores
         N = pred_X.shape[0]
         explanations = []
-        for i in range(N):
-            samle_expl_dict = {}
-            samle_expl_dict[self.id_field_name] = ids[i]
+        for i in range(N):            
 
             target_class_prob = pred_target_class_prob[i]
             pred_class = class_names[0] if target_class_prob < 0.5 else class_names[1]
@@ -144,16 +143,29 @@ class ModelServer:
                 target_class_prob if target_class_prob > 0.5 else 1 - target_class_prob
             )
 
-            samle_expl_dict["predicted_class"] = pred_class
-            samle_expl_dict["predicted_class_prob"] = pred_class_prob
-            samle_expl_dict["baseline_prob"] = shap_values.base_values[i]
+            other_class = str(
+                class_names[0] if class_names[1] == pred_class else class_names[1]
+            )
+            probabilities = {
+                other_class: np.round(1 - pred_class_prob, 5),
+                pred_class: np.round(pred_class_prob, 5),
+            }
 
-            feature_impacts = {}
+            sample_expl_dict = {}
+            sample_expl_dict["baseline"] = np.round(shap_values.base_values[i], 5)
+
+            feature_scores = {}
             for f_num, feature in enumerate(shap_values.feature_names):
-                feature_impacts[X_cols[f_num]] = round(shap_values.values[i][f_num], 4)
+                feature_scores[feature] = round(shap_values.values[i][f_num], 5)
 
-            samle_expl_dict["feature_impacts"] = feature_impacts
-            explanations.append(samle_expl_dict)
+            sample_expl_dict["feature_scores"] = feature_scores
+
+            explanations.append({
+                self.id_field_name: ids[i],
+                "label": str(pred_class),
+                "probabilities": probabilities,
+                "explanations": sample_expl_dict,
+            })
 
         # ------------------------------------------------------
         """
@@ -167,5 +179,6 @@ class ModelServer:
         # shap_values.data = shap_values.data[sample_idx]
         # shap.plots.waterfall(shap_values)
         # ------------------------------------------------------
+        explanations = {"predictions": explanations}
         explanations = json.dumps(explanations, cls=utils.NpEncoder, indent=2)
         return explanations
